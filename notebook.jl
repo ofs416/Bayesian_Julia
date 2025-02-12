@@ -52,13 +52,13 @@ $$\begin{align*}
 "
 
 # ╔═╡ 2037ee62-5cad-4e30-8df6-003f9a8c158e
-σ(X) = 1 / (1 + exp(-clamp.(X, -10_000, 10_000)))
+σ(X) = 1 / (1 + exp(-clamp.(X, -10_000, 10_000)));
 
 # ╔═╡ ef7e43ba-12f0-4f55-88a1-18992f5effb0
-likelihood(X, y, w) = σ.(y .* (X * w))
+likelihood(X, y, w) = σ.(y .* (X * w));
 
 # ╔═╡ e3c72135-a66e-411a-aff4-d4972f099418
-log_loss(X, y, w) = sum(log.(likelihood(X, y, w))) / size(X, 1)
+log_loss(X, y, w) = sum(log.(likelihood(X, y, w))) / size(X, 1);
 
 # ╔═╡ 4a128024-e7e8-4433-9c66-bfaddfcf556d
 # Gradient ascent
@@ -158,7 +158,7 @@ end
 neg_log_loss(Input, labels, params) = - log_loss(Input, labels, params)
 
 # ╔═╡ bb3e6f35-74d4-4626-94cc-022d4c76db57
-@bind length_scale Slider(0.1:0.001:2.001, default=1)
+@bind length_scale Slider(0.1:0.001:2.001, default=1.1)
 
 # ╔═╡ ed5e40db-6210-425c-8dff-99813e26e9f4
 print(length_scale)
@@ -168,9 +168,6 @@ X_basis = evaluate_gaussian_basis_functions(length_scale, X, X);
 
 # ╔═╡ f48af3c1-e430-4c31-96f2-411c113a0099
 w_opt_basis = optim_train(X_basis, y, neg_log_loss);
-
-# ╔═╡ f9c2e4eb-b3d8-4c90-9958-1230dd1ffc09
-predictions = σ.(X_basis * w_opt_basis);
 
 # ╔═╡ d2563018-b32d-405f-a0e1-98e1a68bc114
 x_range = range(-3, 3, length=100);
@@ -235,7 +232,7 @@ Evaluating the posterior and calculating the predictive distribution is intracta
 neg_posterior_log_loss(X, y, w; sigma_0) = - sum(log.(likelihood(X, y, w))) + dot(w, w) / (2 * sigma_0^2)
 
 # ╔═╡ d260d2e5-f0f1-49ce-bcb0-9dcd39eb3842
-@bind σ_0 Slider(0.01:0.001:1, default=0.03)
+@bind σ_0 Slider(0.01:0.001:1, default=0.9)
 
 # ╔═╡ 1d22519d-c69a-400b-8163-8bf4434604de
 print(σ_0);
@@ -280,14 +277,28 @@ $w_{MAP}$is the maximum a posteriori of the parameters. Now we progress to findi
 "
 
 # ╔═╡ 2e43cafc-9596-4810-9699-49411554d817
-# Define a wrapper function to compute the Hessian with respect to w
-function compute_hessian(X, y, w; sigma_0)
-    loss(w) = neg_posterior_log_loss(X, y, w; sigma_0)
-    return ForwardDiff.hessian(loss, w)
-end;
+function A_calc(X, y, w, sigma_0)
+    # Compute the logistic function values
+    p = σ.(X * w)
+	# Create a diagonal matrix from p .* (1 .- p)
+	d = vec(p .* (1 .- p))
+    D = Diagonal(d)
+
+    # Compute the covariance matrix
+    A = X' * D * X
+	A += I(size(X, 2)) ./ sigma_0^2
+	return A
+end
+
+# ╔═╡ f1da5c87-3e10-472a-96f5-b3f7609a5aa0
+function predict_lapl(X, w_MAP, A_inv)
+	quadratic_form = reshape(diag(X * A_inv * X'), :, 1)
+	cdf_value = cdf(Normal(), X * w_MAP ./ sqrt.(1 .+ quadratic_form))
+	return cdf_value
+end
 
 # ╔═╡ 88e7c3e1-a927-415e-97b6-4e9035cea41d
-A = compute_hessian(X, y, w_MAP; sigma_0=σ_0);
+A = A_calc(X, y, w_MAP, σ_0);
 
 # ╔═╡ 6eb51be1-9f67-4087-84cb-52be3507e503
 A_inv = inv(A);
@@ -304,17 +315,46 @@ xy_point = hcat(repeat(x_r, inner=length(y_r)), repeat(y_r, outer=length(x_r)));
 # ╔═╡ 2066c16d-4323-495c-9a84-c208dd86aac7
 X_points = [ones(size(points, 1)) xy_point];
 
-# ╔═╡ afdc2e9d-e3f1-4805-bf7a-56831954b3b5
-quadratic_form = reshape(diag(X_points * A_inv * X_points'), :, 1);
-
 # ╔═╡ cbecfee6-cd90-4567-8df9-471e313e2084
-cdf_value = cdf(Normal(), X_points * w_MAP ./ sqrt.(1 .+ quadratic_form));
+cdf_value = predict_lapl(X_points, w_MAP, A_inv);
 
 # ╔═╡ 3949e03d-58b2-47b6-bc3d-3e00a842d50b
 cdf_mesh = reshape(cdf_value, 100, 100);
 
 # ╔═╡ 8847cb1e-9249-4aaa-b16f-1217b913f7c7
 contourf(x_r, y_r, cdf_mesh, color=:turbo, linewidth= 0, levels=10)
+
+# ╔═╡ 0dee7378-213d-4e92-afe8-d932701023c3
+md"
+We will now combine integrate the use of basis functions.
+"
+
+# ╔═╡ 40e9c8c2-d380-4b07-8de0-016f474cd810
+w_basis_MAP = optim_train(X_basis, y, neg_posterior_log_loss, sigma_0=σ_0);
+
+# ╔═╡ e2bdc697-fe6c-4dcb-a549-4a32a83aea75
+A_basis = A_calc(X_basis, y, w_basis_MAP, σ_0);
+
+# ╔═╡ 000569f6-6843-4072-9c1f-6ef1609d725c
+A_basis_inv = inv(A_basis);
+
+# ╔═╡ 6da4c36c-d631-46d2-9b5f-17e51c4cb96d
+cdf_basis = predict_lapl(X_basis, w_basis_MAP, A_basis_inv);
+
+# ╔═╡ 10913cb7-a422-411b-90ef-830a3d0f1c4d
+quad_mesh = reshape(diag(points_basis * A_basis_inv * points_basis'), :, 1);
+
+# ╔═╡ 4e6f9cdd-3afc-4707-9c13-832133de66de
+cdf_lap_mesh = cdf(Normal(), points_basis * w_basis_MAP ./ sqrt.(1 .+ quad_mesh));
+
+# ╔═╡ 60a5dbed-de09-4392-9c61-8079b8536f74
+points_predictions_mesh_lap = reshape(cdf_lap_mesh, 100, 100);
+
+# ╔═╡ 588a391d-7607-474e-b970-b86ef773053a
+plot_lap = contour(x_range, y_range, points_predictions_mesh_lap, levels=[0.25,0.5,0.75], c=[0,:black,1], lw=2);
+
+# ╔═╡ 6a15b18e-6cab-4326-bcdb-6f3a4c940303
+scatter!(plot_lap, X[:, 2], X[:, 3], markercolor=y_colour)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2007,7 +2047,6 @@ version = "1.4.1+2"
 # ╠═ed5e40db-6210-425c-8dff-99813e26e9f4
 # ╠═62cddff2-a679-41d6-9a74-7ce4ca8f921c
 # ╠═f48af3c1-e430-4c31-96f2-411c113a0099
-# ╠═f9c2e4eb-b3d8-4c90-9958-1230dd1ffc09
 # ╠═d2563018-b32d-405f-a0e1-98e1a68bc114
 # ╠═d62553bc-9c0c-4bf3-acae-dca1876d46b0
 # ╠═2dcbbbb8-df15-4cc9-b45c-fe51f7519eb5
@@ -2025,15 +2064,25 @@ version = "1.4.1+2"
 # ╠═56511b8d-49ba-4c8e-93b1-ec6f29a27cbc
 # ╟─87c3a145-c384-414e-838b-c2e6589885dc
 # ╠═2e43cafc-9596-4810-9699-49411554d817
+# ╠═f1da5c87-3e10-472a-96f5-b3f7609a5aa0
 # ╠═88e7c3e1-a927-415e-97b6-4e9035cea41d
 # ╠═6eb51be1-9f67-4087-84cb-52be3507e503
 # ╠═8c410647-a452-4fde-82f4-146a943ff3c5
 # ╠═b55710d2-8e12-4aa0-846d-84b94ec014cd
 # ╠═2c49a926-5046-47e8-aad3-da713ae40c2c
 # ╠═2066c16d-4323-495c-9a84-c208dd86aac7
-# ╠═afdc2e9d-e3f1-4805-bf7a-56831954b3b5
 # ╠═cbecfee6-cd90-4567-8df9-471e313e2084
 # ╠═3949e03d-58b2-47b6-bc3d-3e00a842d50b
 # ╠═8847cb1e-9249-4aaa-b16f-1217b913f7c7
+# ╟─0dee7378-213d-4e92-afe8-d932701023c3
+# ╠═40e9c8c2-d380-4b07-8de0-016f474cd810
+# ╠═e2bdc697-fe6c-4dcb-a549-4a32a83aea75
+# ╠═000569f6-6843-4072-9c1f-6ef1609d725c
+# ╠═6da4c36c-d631-46d2-9b5f-17e51c4cb96d
+# ╠═10913cb7-a422-411b-90ef-830a3d0f1c4d
+# ╠═4e6f9cdd-3afc-4707-9c13-832133de66de
+# ╠═60a5dbed-de09-4392-9c61-8079b8536f74
+# ╠═588a391d-7607-474e-b970-b86ef773053a
+# ╠═6a15b18e-6cab-4326-bcdb-6f3a4c940303
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
