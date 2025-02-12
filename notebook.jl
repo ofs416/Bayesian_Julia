@@ -45,8 +45,8 @@ md"
 ## Logistic Regression
 
 $$\begin{align*}
- p(y_n | \tilde{\mathbf{x}}_n, \mathbf{\theta}) &= (1 +y_n) \sigma (\mathbf{w}^T \tilde{\mathbf{x}}_n) + (1 - y_n) (1 - \sigma (\mathbf{w}^T \tilde{\mathbf{x}}_n))\\
-&= (1 + y_n) \sigma (\mathbf{w}^T \tilde{\mathbf{x}}_n) + (1 - y_n)  \sigma (-\mathbf{w}^T \tilde{\mathbf{x}}_n)\\
+ p(y_n | \tilde{\mathbf{x}}_n, \mathbf{\theta}) &= \frac{(1 + y_n)}{2} \sigma (\mathbf{w}^T \tilde{\mathbf{x}}_n) + \frac{(1 - y_n)}{2} (1 - \sigma (\mathbf{w}^T \tilde{\mathbf{x}}_n))\\
+&= \frac{(1 + y_n)}{2} \sigma (\mathbf{w}^T \tilde{\mathbf{x}}_n) + \frac{(1 - y_n)}{2}  \sigma (-\mathbf{w}^T \tilde{\mathbf{x}}_n)\\
 &= \sigma (y_n \mathbf{w}^T \tilde{\mathbf{x}}_n)
 \end{align*}$$
 "
