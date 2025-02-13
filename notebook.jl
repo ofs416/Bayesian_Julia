@@ -17,28 +17,25 @@ macro bind(def, element)
 end
 
 # ╔═╡ fb297361-57da-4d11-b956-5b77ab7683d0
-using DelimitedFiles
+using DelimitedFiles, Plots, PlutoUI, ForwardDiff, Zygote, Optim, LinearAlgebra, Distributions
 
-# ╔═╡ 559791c3-1f90-4254-97c4-53e064bcc55d
-using Plots, PlutoUI
-
-# ╔═╡ fd3ce781-20bf-47c5-b972-819eda905eab
-using ForwardDiff, Zygote, Optim, LinearAlgebra, Distributions
+# ╔═╡ 90dd93d4-50ea-4957-a8ff-fbeffb1cd28c
+include("helper.jl");
 
 # ╔═╡ be95189b-d1cf-40de-9167-3fef942c9288
 TableOfContents()
 
 # ╔═╡ 6c057edd-bf95-4ba4-b2fb-99aa069a9f0a
-X = [ones(1000, 1) readdlm("X.txt", ' ', Float64)]; 
-
-# ╔═╡ 0b0e4a65-d82c-4cef-a4d7-95f6e7c0a789
-y_colour = readdlm("y.txt", ' ', Int64);
+begin
+	X = [ones(1000, 1) readdlm("X.txt", ' ', Float64)]
+	y_colour = readdlm("y.txt", ' ', Int64)
+end;
 
 # ╔═╡ 6467e2bb-a2ce-41de-9804-a99722a6c1eb
 y = y_colour .* 2 .- 1;
 
 # ╔═╡ dd633b30-5e9d-4275-845b-3de596e5f6c2
-scatter(X[:, 2], X[:, 3], markercolor=y_colour, legend=false)
+data_plot = scatter(X[:, 2], X[:, 3], markercolor=y_colour, legend=false)
 
 # ╔═╡ 8bb1c008-ccc9-4283-aef6-069cd3c4146e
 md"
@@ -54,89 +51,32 @@ $$\begin{align*}
 # ╔═╡ 2037ee62-5cad-4e30-8df6-003f9a8c158e
 σ(X) = 1 / (1 + exp(-clamp.(X, -10_000, 10_000)));
 
+# ╔═╡ d04cd42c-a84e-4f26-b9c4-4589b3ae92f4
+predict(X, w) = σ.(X * w);
+
 # ╔═╡ ef7e43ba-12f0-4f55-88a1-18992f5effb0
 likelihood(X, y, w) = σ.(y .* (X * w));
 
 # ╔═╡ e3c72135-a66e-411a-aff4-d4972f099418
-log_loss(X, y, w) = sum(log.(likelihood(X, y, w))) / size(X, 1);
-
-# ╔═╡ 4a128024-e7e8-4433-9c66-bfaddfcf556d
-# Gradient ascent
-function train(Input, labels; lr=0.01, epochs=500)
-    n_features = size(Input, 2)
-    params = zeros(n_features, 1) .* 0.0001 # Initialize weights
-    println("Initial log likelihood = $(log_loss(Input, labels, params))")
-    
-    for i in 1:epochs
-        lr = lr * 0.9999  # Decrease learning rate
-        # Compute gradient using Zygote
-    	grad = Zygote.gradient(params -> log_loss(Input, labels, params), params)[1]
-		
-        # Update weights (ascent because we're maximizing)
-        params .+= lr * grad
-
-        # Print progress every 100 epochs
-        if i % 100 == 0
-            loss = log_loss(Input, labels, params)
-            println("Epoch $i: log likelihood = $loss")
-            
-            
-        end
-    end
-    println("Training complete.")
-    println("Final log likelihood = $(log_loss(Input, labels, params))")
-    return params
-end
-
-# ╔═╡ 4752dcc1-44fd-41d3-a9ed-61cbb2309d1f
-# Define the training function using Optim.jl
-function optim_train(Input, labels, objective; lr=0.01, epochs=500, kwargs...)
-    n_features = size(Input, 2)
-    params = zeros(n_features) .* 0.0001  # Initialize weights
-
-    # Define the objective function
-    objective_function(params) = objective(Input, labels, params; kwargs...)
-
-    # Define the gradient function using Zygote
-    function gradient!(storage, params)
-        grad = Zygote.gradient(objective_function, params)[1]
-        copyto!(storage, grad)  # Copy the gradient to the storage array
-    end
-
-    # Use Optim.jl to optimize the parameters
-    result = optimize(
-        objective_function, 
-        gradient!, 
-        params, 
-        LBFGS(), 
-        Optim.Options(
-            iterations=epochs, 
-            show_trace=true, 
-            show_every=100
-        )
-    )
-
-    # Extract the optimized parameters
-    optimized_params = result.minimizer
-
-    println("Training complete.")
-    println("Final objective value = $(objective_function(optimized_params))")
-    return optimized_params
-end
+neg_log_loss(X, y, w) = - sum(log.(likelihood(X, y, w)));
 
 # ╔═╡ d3bfb3c0-3418-4eda-b7e6-a78d5c2de425
-w_opt = train(X, y);
+w_opt = optim_train(X, y, neg_log_loss);
 
-# ╔═╡ 3a734759-8595-4df4-92ee-ecae86c790f0
-pred = σ.(X * w_opt);
+# ╔═╡ d2563018-b32d-405f-a0e1-98e1a68bc114
+range_3 = range(-3, 3, length=100);
 
-# ╔═╡ b0e19a51-28f8-46ab-8efb-4e56eaebea5b
-scatter(X[:, 2], X[:, 3], markercolor=y_colour);
+# ╔═╡ 8c410647-a452-4fde-82f4-146a943ff3c5
+range_100 = range(-100, 100, length=100);
 
 # ╔═╡ 90a86dd2-915f-416e-a326-7dc28b95204c
-contour!(-3:0.01:3, -3:0.01:3, 
-		(x, y) -> σ.([1 x y] * w_opt)[1], 
-		levels=[0.25,0.5,0.75], c=[0,:black,1], lw=2)
+linear_plot = contour(deepcopy(data_plot),
+	range_3, range_3, 
+	grid_prediction(range_3, nothing, predict, w_opt),
+	levels=[0.25, 0.5, 0.75],
+	c=[0, :black, 1], 
+	lw=2, 
+	legend=false)
 
 # ╔═╡ 4ad7ebe9-a802-408b-aa3c-6be7f654f815
 md"
@@ -152,10 +92,7 @@ function evaluate_gaussian_basis_functions(l, X, Z)
     ones_X = ones(size(X, 1))
     r2 = X2 * ones_Z' .- 2 * (X * Z') .+ ones_X * Z2'
     return exp.(-0.5 / l^2 .* r2)
-end
-
-# ╔═╡ 34ff6232-3f26-4584-9776-f85fb816ff5e
-neg_log_loss(Input, labels, params) = - log_loss(Input, labels, params)
+end;
 
 # ╔═╡ bb3e6f35-74d4-4626-94cc-022d4c76db57
 @bind length_scale Slider(0.1:0.001:2.001, default=1.1)
@@ -169,32 +106,15 @@ X_basis = evaluate_gaussian_basis_functions(length_scale, X, X);
 # ╔═╡ f48af3c1-e430-4c31-96f2-411c113a0099
 w_opt_basis = optim_train(X_basis, y, neg_log_loss);
 
-# ╔═╡ d2563018-b32d-405f-a0e1-98e1a68bc114
-x_range = range(-3, 3, length=100);
-
-# ╔═╡ d62553bc-9c0c-4bf3-acae-dca1876d46b0
-y_range = range(-3, 3, length=100);
-
-# ╔═╡ 2dcbbbb8-df15-4cc9-b45c-fe51f7519eb5
-points = hcat(repeat(x_range, inner=length(y_range)), repeat(y_range, outer=length(x_range)));
-
-# ╔═╡ c693c9c0-2fca-41c0-a989-407d388ae52d
-points_basis = evaluate_gaussian_basis_functions(1, [ones(100^2) points], X);
-
-# ╔═╡ fad4dcdb-02a4-4e6f-998b-3bb718783429
-points_predictions = σ.(points_basis * w_opt_basis);
-
-# ╔═╡ 545220f5-7f01-4b3a-9e59-f3b494156f64
-points_predictions_mesh = reshape(points_predictions, 100, 100);
-
 # ╔═╡ 21af3443-b25e-4de4-9127-4a53c287f099
-plot = contour(x_range, y_range, points_predictions_mesh, levels=[0.25,0.5,0.75], c=[0,:black,1], lw=2);
-
-# ╔═╡ ac31b0b5-67d0-4799-9c07-4b8c0f43c3cf
-scatter!(plot, X[:, 2], X[:, 3], markercolor=y_colour);
-
-# ╔═╡ 0daf42e5-0e30-4397-9ff1-8e84ef734f75
-plot
+basis_plot = contour(deepcopy(data_plot), 
+	range_3, range_3, 
+	grid_prediction(range_3, 
+		evaluate_gaussian_basis_functions, 
+		predict, 
+		w_opt_basis), 
+	levels=[0.25,0.5,0.75], 
+	c=[0,:black,1], lw=2)
 
 # ╔═╡ f7a03a46-a6a2-4b7e-b297-5f3a9e86f8b0
 md"
@@ -229,7 +149,7 @@ Evaluating the posterior and calculating the predictive distribution is intracta
 "
 
 # ╔═╡ a575326b-ec21-4736-867c-5a9a2a0acc75
-neg_posterior_log_loss(X, y, w; sigma_0) = - sum(log.(likelihood(X, y, w))) + dot(w, w) / (2 * sigma_0^2)
+neg_posterior_log_loss(X, y, w; sigma_0) = - sum(log.(likelihood(X, y, w))) + dot(w, w) / (2 * sigma_0^2);
 
 # ╔═╡ d260d2e5-f0f1-49ce-bcb0-9dcd39eb3842
 @bind σ_0 Slider(0.01:0.001:1, default=0.9)
@@ -288,14 +208,14 @@ function A_calc(X, y, w, sigma_0)
     A = X' * D * X
 	A += I(size(X, 2)) ./ sigma_0^2
 	return A
-end
+end;
 
 # ╔═╡ f1da5c87-3e10-472a-96f5-b3f7609a5aa0
 function predict_lapl(X, w_MAP, A_inv)
 	quadratic_form = reshape(diag(X * A_inv * X'), :, 1)
 	cdf_value = cdf(Normal(), X * w_MAP ./ sqrt.(1 .+ quadratic_form))
 	return cdf_value
-end
+end;
 
 # ╔═╡ 88e7c3e1-a927-415e-97b6-4e9035cea41d
 A = A_calc(X, y, w_MAP, σ_0);
@@ -303,26 +223,15 @@ A = A_calc(X, y, w_MAP, σ_0);
 # ╔═╡ 6eb51be1-9f67-4087-84cb-52be3507e503
 A_inv = inv(A);
 
-# ╔═╡ 8c410647-a452-4fde-82f4-146a943ff3c5
-x_r = range(-100, 100, length=100);
-
-# ╔═╡ b55710d2-8e12-4aa0-846d-84b94ec014cd
-y_r = range(-100, 100, length=100);
-
-# ╔═╡ 2c49a926-5046-47e8-aad3-da713ae40c2c
-xy_point = hcat(repeat(x_r, inner=length(y_r)), repeat(y_r, outer=length(x_r)));
-
-# ╔═╡ 2066c16d-4323-495c-9a84-c208dd86aac7
-X_points = [ones(size(points, 1)) xy_point];
-
-# ╔═╡ cbecfee6-cd90-4567-8df9-471e313e2084
-cdf_value = predict_lapl(X_points, w_MAP, A_inv);
-
-# ╔═╡ 3949e03d-58b2-47b6-bc3d-3e00a842d50b
-cdf_mesh = reshape(cdf_value, 100, 100);
-
 # ╔═╡ 8847cb1e-9249-4aaa-b16f-1217b913f7c7
-contourf(x_r, y_r, cdf_mesh, color=:turbo, linewidth= 0, levels=10)
+uncertainty_plot = contourf(range_100, range_100, 
+	grid_prediction(range_100, 
+		nothing, 
+		predict_lapl, 
+		w_MAP,
+		A_inv), 
+	color=:turbo, 
+	linewidth= 0, levels=10)
 
 # ╔═╡ 0dee7378-213d-4e92-afe8-d932701023c3
 md"
@@ -338,23 +247,15 @@ A_basis = A_calc(X_basis, y, w_basis_MAP, σ_0);
 # ╔═╡ 000569f6-6843-4072-9c1f-6ef1609d725c
 A_basis_inv = inv(A_basis);
 
-# ╔═╡ 6da4c36c-d631-46d2-9b5f-17e51c4cb96d
-cdf_basis = predict_lapl(X_basis, w_basis_MAP, A_basis_inv);
-
-# ╔═╡ 10913cb7-a422-411b-90ef-830a3d0f1c4d
-quad_mesh = reshape(diag(points_basis * A_basis_inv * points_basis'), :, 1);
-
-# ╔═╡ 4e6f9cdd-3afc-4707-9c13-832133de66de
-cdf_lap_mesh = cdf(Normal(), points_basis * w_basis_MAP ./ sqrt.(1 .+ quad_mesh));
-
-# ╔═╡ 60a5dbed-de09-4392-9c61-8079b8536f74
-points_predictions_mesh_lap = reshape(cdf_lap_mesh, 100, 100);
-
 # ╔═╡ 588a391d-7607-474e-b970-b86ef773053a
-plot_lap = contour(x_range, y_range, points_predictions_mesh_lap, levels=[0.25,0.5,0.75], c=[0,:black,1], lw=2);
-
-# ╔═╡ 6a15b18e-6cab-4326-bcdb-6f3a4c940303
-scatter!(plot_lap, X[:, 2], X[:, 3], markercolor=y_colour)
+plot_lap = contour(deepcopy(data_plot), 
+	range_3, range_3,
+	grid_prediction(range_3, 
+		evaluate_gaussian_basis_functions, 
+		predict_lapl, 
+		w_basis_MAP,
+		A_basis_inv), 
+	levels=[0.25,0.5,0.75], c=[0,:black,1], lw=2)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -374,7 +275,7 @@ Distributions = "~0.25.117"
 ForwardDiff = "~0.10.38"
 Optim = "~1.11.0"
 Plots = "~1.40.9"
-PlutoUI = "~0.7.23"
+PlutoUI = "~0.7.60"
 Zygote = "~0.7.4"
 """
 
@@ -384,7 +285,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "6efa0953bcf2bf81a89f20bdbb0391bd3bf579fb"
+project_hash = "5b51f76d5db281153a4fe80412039a4003b2e45e"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -533,19 +434,15 @@ version = "3.28.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
-git-tree-sha1 = "c7acce7a7e1078a20a285211dd73cd3941a871d6"
+git-tree-sha1 = "b10d0b65641d57b8b4d5e234446582de5047050d"
 uuid = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
-version = "0.12.0"
-weakdeps = ["StyledStrings"]
-
-    [deps.ColorTypes.extensions]
-    StyledStringsExt = "StyledStrings"
+version = "0.11.5"
 
 [[deps.ColorVectorSpace]]
 deps = ["ColorTypes", "FixedPointNumbers", "LinearAlgebra", "Requires", "Statistics", "TensorCore"]
-git-tree-sha1 = "8b3b6f87ce8f65a2b4f857528fd8d70086cd72b1"
+git-tree-sha1 = "a1f44953f2382ebb937d60dafbe2deea4bd23249"
 uuid = "c3611d14-8923-5661-9e6a-0046d554d3a4"
-version = "0.11.0"
+version = "0.10.0"
 weakdeps = ["SpecialFunctions"]
 
     [deps.ColorVectorSpace.extensions]
@@ -867,9 +764,9 @@ version = "0.3.27"
 
 [[deps.Hyperscript]]
 deps = ["Test"]
-git-tree-sha1 = "8d511d5b81240fc8e6802386302675bdf47737b9"
+git-tree-sha1 = "179267cfa5e712760cd43dcae385d7ea90cc25a4"
 uuid = "47d2ed2b-36de-50cf-bf87-49c2cf4b8b91"
-version = "0.0.4"
+version = "0.0.5"
 
 [[deps.HypertextLiteral]]
 deps = ["Tricks"]
@@ -1126,6 +1023,11 @@ git-tree-sha1 = "f02b56007b064fbfddb4c9cd60161b6dd0f40df3"
 uuid = "e6f89c97-d47a-5376-807f-9c37f3926c36"
 version = "1.1.0"
 
+[[deps.MIMEs]]
+git-tree-sha1 = "65f28ad4b594aebe22157d6fac869786a255b7eb"
+uuid = "6c6e2e6c-3030-632d-7369-2d6c69616d65"
+version = "0.1.4"
+
 [[deps.MacroTools]]
 git-tree-sha1 = "72aebe0b5051e5143a079a4685a46da330a40472"
 uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
@@ -1321,10 +1223,10 @@ version = "1.40.9"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [[deps.PlutoUI]]
-deps = ["AbstractPlutoDingetjes", "Base64", "Dates", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "Random", "Reexport", "UUIDs"]
-git-tree-sha1 = "5152abbdab6488d5eec6a01029ca6697dff4ec8f"
+deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
+git-tree-sha1 = "eba4810d5e6a01f612b948c9fa94f905b49087b0"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.23"
+version = "0.7.60"
 
 [[deps.PositiveFactorizations]]
 deps = ["LinearAlgebra"]
@@ -2023,39 +1925,27 @@ version = "1.4.1+2"
 
 # ╔═╡ Cell order:
 # ╠═fb297361-57da-4d11-b956-5b77ab7683d0
-# ╠═559791c3-1f90-4254-97c4-53e064bcc55d
-# ╠═fd3ce781-20bf-47c5-b972-819eda905eab
+# ╠═90dd93d4-50ea-4957-a8ff-fbeffb1cd28c
 # ╠═be95189b-d1cf-40de-9167-3fef942c9288
 # ╠═6c057edd-bf95-4ba4-b2fb-99aa069a9f0a
-# ╠═0b0e4a65-d82c-4cef-a4d7-95f6e7c0a789
 # ╠═6467e2bb-a2ce-41de-9804-a99722a6c1eb
 # ╠═dd633b30-5e9d-4275-845b-3de596e5f6c2
 # ╟─8bb1c008-ccc9-4283-aef6-069cd3c4146e
 # ╠═2037ee62-5cad-4e30-8df6-003f9a8c158e
+# ╠═d04cd42c-a84e-4f26-b9c4-4589b3ae92f4
 # ╠═ef7e43ba-12f0-4f55-88a1-18992f5effb0
 # ╠═e3c72135-a66e-411a-aff4-d4972f099418
-# ╠═4a128024-e7e8-4433-9c66-bfaddfcf556d
-# ╠═4752dcc1-44fd-41d3-a9ed-61cbb2309d1f
 # ╠═d3bfb3c0-3418-4eda-b7e6-a78d5c2de425
-# ╠═3a734759-8595-4df4-92ee-ecae86c790f0
-# ╠═b0e19a51-28f8-46ab-8efb-4e56eaebea5b
+# ╠═d2563018-b32d-405f-a0e1-98e1a68bc114
+# ╠═8c410647-a452-4fde-82f4-146a943ff3c5
 # ╠═90a86dd2-915f-416e-a326-7dc28b95204c
 # ╟─4ad7ebe9-a802-408b-aa3c-6be7f654f815
 # ╠═f877db91-fbeb-454d-bc8b-66f07d9957cd
-# ╠═34ff6232-3f26-4584-9776-f85fb816ff5e
 # ╠═bb3e6f35-74d4-4626-94cc-022d4c76db57
 # ╠═ed5e40db-6210-425c-8dff-99813e26e9f4
 # ╠═62cddff2-a679-41d6-9a74-7ce4ca8f921c
 # ╠═f48af3c1-e430-4c31-96f2-411c113a0099
-# ╠═d2563018-b32d-405f-a0e1-98e1a68bc114
-# ╠═d62553bc-9c0c-4bf3-acae-dca1876d46b0
-# ╠═2dcbbbb8-df15-4cc9-b45c-fe51f7519eb5
-# ╠═c693c9c0-2fca-41c0-a989-407d388ae52d
-# ╠═fad4dcdb-02a4-4e6f-998b-3bb718783429
-# ╠═545220f5-7f01-4b3a-9e59-f3b494156f64
 # ╠═21af3443-b25e-4de4-9127-4a53c287f099
-# ╠═ac31b0b5-67d0-4799-9c07-4b8c0f43c3cf
-# ╠═0daf42e5-0e30-4397-9ff1-8e84ef734f75
 # ╟─f7a03a46-a6a2-4b7e-b297-5f3a9e86f8b0
 # ╠═a575326b-ec21-4736-867c-5a9a2a0acc75
 # ╠═d260d2e5-f0f1-49ce-bcb0-9dcd39eb3842
@@ -2067,22 +1957,11 @@ version = "1.4.1+2"
 # ╠═f1da5c87-3e10-472a-96f5-b3f7609a5aa0
 # ╠═88e7c3e1-a927-415e-97b6-4e9035cea41d
 # ╠═6eb51be1-9f67-4087-84cb-52be3507e503
-# ╠═8c410647-a452-4fde-82f4-146a943ff3c5
-# ╠═b55710d2-8e12-4aa0-846d-84b94ec014cd
-# ╠═2c49a926-5046-47e8-aad3-da713ae40c2c
-# ╠═2066c16d-4323-495c-9a84-c208dd86aac7
-# ╠═cbecfee6-cd90-4567-8df9-471e313e2084
-# ╠═3949e03d-58b2-47b6-bc3d-3e00a842d50b
 # ╠═8847cb1e-9249-4aaa-b16f-1217b913f7c7
 # ╟─0dee7378-213d-4e92-afe8-d932701023c3
 # ╠═40e9c8c2-d380-4b07-8de0-016f474cd810
 # ╠═e2bdc697-fe6c-4dcb-a549-4a32a83aea75
 # ╠═000569f6-6843-4072-9c1f-6ef1609d725c
-# ╠═6da4c36c-d631-46d2-9b5f-17e51c4cb96d
-# ╠═10913cb7-a422-411b-90ef-830a3d0f1c4d
-# ╠═4e6f9cdd-3afc-4707-9c13-832133de66de
-# ╠═60a5dbed-de09-4392-9c61-8079b8536f74
 # ╠═588a391d-7607-474e-b970-b86ef773053a
-# ╠═6a15b18e-6cab-4326-bcdb-6f3a4c940303
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
