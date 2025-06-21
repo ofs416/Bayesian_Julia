@@ -29,10 +29,8 @@ TableOfContents()
 begin
 	X = [ones(1000, 1) readdlm("X.txt", ' ', Float64)]
 	y_colour = readdlm("y.txt", ' ', Int64)
+	y = y_colour .* 2 .- 1;
 end;
-
-# ╔═╡ 6467e2bb-a2ce-41de-9804-a99722a6c1eb
-y = y_colour .* 2 .- 1;
 
 # ╔═╡ dd633b30-5e9d-4275-845b-3de596e5f6c2
 data_plot = scatter(X[:, 2], X[:, 3], markercolor=y_colour, legend=false)
@@ -61,7 +59,7 @@ likelihood(X, y, w) = σ.(y .* (X * w));
 neg_log_loss(X, y, w) = - sum(log.(likelihood(X, y, w)));
 
 # ╔═╡ d3bfb3c0-3418-4eda-b7e6-a78d5c2de425
-w_opt = optim_train(X, y, neg_log_loss);
+w_opt, linear_loss = optim_train(X, y, neg_log_loss);
 
 # ╔═╡ d2563018-b32d-405f-a0e1-98e1a68bc114
 range_3 = range(-3, 3, length=100);
@@ -104,7 +102,7 @@ print(length_scale)
 X_basis = evaluate_gaussian_basis_functions(length_scale, X, X);
 
 # ╔═╡ f48af3c1-e430-4c31-96f2-411c113a0099
-w_opt_basis = optim_train(X_basis, y, neg_log_loss);
+w_opt_basis, loss_basis = optim_train(X_basis, y, neg_log_loss);
 
 # ╔═╡ 21af3443-b25e-4de4-9127-4a53c287f099
 basis_plot = contour(deepcopy(data_plot), 
@@ -189,7 +187,7 @@ $$p(\mathbf{z}) = \frac{f(\mathbf{z})}{Z} \approx  \mathcal{N}(\mathbf{z} | \mat
 "
 
 # ╔═╡ 56511b8d-49ba-4c8e-93b1-ec6f29a27cbc
-w_MAP = optim_train(X, y, neg_posterior_log_loss, sigma_0=σ_0);
+w_MAP, loss_MAP = optim_train(X, y, neg_posterior_log_loss, sigma_0=σ_0);
 
 # ╔═╡ 87c3a145-c384-414e-838b-c2e6589885dc
 md"
@@ -239,7 +237,7 @@ We will now combine integrate the use of basis functions.
 "
 
 # ╔═╡ 40e9c8c2-d380-4b07-8de0-016f474cd810
-w_basis_MAP = optim_train(X_basis, y, neg_posterior_log_loss, sigma_0=σ_0);
+w_basis_MAP, loss_basis_MAP = optim_train(X_basis, y, neg_posterior_log_loss, sigma_0=σ_0);
 
 # ╔═╡ e2bdc697-fe6c-4dcb-a549-4a32a83aea75
 A_basis = A_calc(X_basis, y, w_basis_MAP, σ_0);
@@ -256,6 +254,16 @@ plot_lap = contour(deepcopy(data_plot),
 		w_basis_MAP,
 		A_basis_inv), 
 	levels=[0.25,0.5,0.75], c=[0,:black,1], lw=2)
+
+# ╔═╡ b7504639-252c-42c5-b87c-4b67639da513
+md"
+## Parameter Selection
+
+We have two paremeters that need selection, $\sigma_0$ and the length scale.
+"
+
+# ╔═╡ 94b21e98-243c-481c-a2da-ef70b5e3ef26
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1928,7 +1936,6 @@ version = "1.4.1+2"
 # ╠═90dd93d4-50ea-4957-a8ff-fbeffb1cd28c
 # ╠═be95189b-d1cf-40de-9167-3fef942c9288
 # ╠═6c057edd-bf95-4ba4-b2fb-99aa069a9f0a
-# ╠═6467e2bb-a2ce-41de-9804-a99722a6c1eb
 # ╠═dd633b30-5e9d-4275-845b-3de596e5f6c2
 # ╟─8bb1c008-ccc9-4283-aef6-069cd3c4146e
 # ╠═2037ee62-5cad-4e30-8df6-003f9a8c158e
@@ -1963,5 +1970,7 @@ version = "1.4.1+2"
 # ╠═e2bdc697-fe6c-4dcb-a549-4a32a83aea75
 # ╠═000569f6-6843-4072-9c1f-6ef1609d725c
 # ╠═588a391d-7607-474e-b970-b86ef773053a
+# ╟─b7504639-252c-42c5-b87c-4b67639da513
+# ╠═94b21e98-243c-481c-a2da-ef70b5e3ef26
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

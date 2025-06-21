@@ -37,7 +37,7 @@ function optim_train(Input, labels, objective; lr=0.01, epochs=500, kwargs...)
 
     println("Training complete.")
     println("Final objective value = $(objective_function(optimized_params))")
-    return optimized_params
+    return optimized_params, objective_function(optimized_params)
 end;
 
 # ╔═╡ f65d5613-732c-4f0f-b858-aef25db7d3f5
